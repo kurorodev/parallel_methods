@@ -144,6 +144,14 @@ void handle_request(int socket, const char *request) {
   if (strstr(request, "OPTIONS")) {
     handle_options(socket);
     return;
+
+    char json_data[1024];
+    snprintf(json_data, sizeof(json_data),
+             "{\"sequential_time\":%.6f,\"parallel_time\":%.6f,"
+             "\"speedup\":%.2f,\"correct\":%d,"
+             "\"rows\":%d,\"cols\":%d,\"threads\":%d}");
+
+    send_json_response(socket, json_data);
   }
 
   if (!strstr(request, "POST")) {
