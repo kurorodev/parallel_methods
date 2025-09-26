@@ -1,11 +1,14 @@
+/* Методы параллельных вычислений Лабораторная работа номер 1
+ * Выполинл: Кудрявцев Даниил 3-ИАИТ-103
+ */
 
-// matrix_server.c
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -31,7 +34,6 @@ void generate_matrix(int **matrix, int rows, int cols) {
   }
 }
 
-// Последовательное умножение
 void multiply_sequential(int **A, int **B, int **C, int rowsA, int colsA,
                          int colsB) {
   for (int i = 0; i < rowsA; i++) {
@@ -44,7 +46,6 @@ void multiply_sequential(int **A, int **B, int **C, int rowsA, int colsA,
   }
 }
 
-// Функция для потока (построчное умножение)
 void *multiply_row_thread(void *arg) {
   ThreadData *data = (ThreadData *)arg;
 
@@ -60,7 +61,12 @@ void *multiply_row_thread(void *arg) {
   pthread_exit(NULL);
 }
 
-// Параллельное умножение (построчно)
+double get_wall_time() {
+  struct timeval time;
+  gettimeofday(&time, NULL);
+  return (double)time.tv_sec + (double)time.tv_usec * 1e-6;
+}
+
 double multiply_parallel(int **A, int **B, int **C, int rowsA, int colsA,
                          int colsB, int thread_count) {
   pthread_t threads[MAX_THREADS];
@@ -69,7 +75,7 @@ double multiply_parallel(int **A, int **B, int **C, int rowsA, int colsA,
   int rows_per_thread = rowsA / thread_count;
   int extra_rows = rowsA % thread_count;
 
-  clock_t start = clock();
+  double start = get_wall_time();
 
   int current_row = 0;
   for (int i = 0; i < thread_count; i++) {
@@ -91,8 +97,8 @@ double multiply_parallel(int **A, int **B, int **C, int rowsA, int colsA,
     pthread_join(threads[i], NULL);
   }
 
-  clock_t end = clock();
-  return ((double)(end - start)) / CLOCKS_PER_SEC;
+  double end = get_wall_time();
+  return end - start;
 }
 
 void free_matrix(int **matrix, int rows) {
@@ -111,11 +117,6 @@ int **allocate_matrix(int rows, int cols) {
 }
 
 void send_json_response(int socket, const char *json) {
-
-  char response[2048];
-  snprintf(response, sizeof(response), "{\"status\":\"success\",\"data\":%s}",
-           json);
-
   char headers[2048];
   snprintf(headers, sizeof(headers),
            "HTTP/1.1 200 OK\r\n"
@@ -140,17 +141,9 @@ void handle_options(int socket) {
 }
 
 void handle_request(int socket, const char *request) {
-  // Парсим HTTP запрос
   if (strstr(request, "OPTIONS")) {
     handle_options(socket);
     return;
-
-    char json_data[1024];
-    snprintf(json_data, sizeof(json_data),
-        "{\"sequential_time\":%.6f,\"parallel_time\":%.6f," "\"speedup\":%.2f,\"correct\":%d,"
-        "\"rows\":%d,\"cols\":%d,\"threads\":%d}"
-
-    send_json_response(socket, json_data);
   }
 
   if (!strstr(request, "POST")) {
@@ -158,7 +151,6 @@ void handle_request(int socket, const char *request) {
     return;
   }
 
-  // Ищем тело запроса
   const char *body_start = strstr(request, "\r\n\r\n");
   if (!body_start) {
     send_json_response(socket, "{\"error\":\"No request body\"}");
@@ -166,7 +158,6 @@ void handle_request(int socket, const char *request) {
   }
   body_start += 4;
 
-  // Парсим JSON: {"rowsA":10,"colsA":10,"rowsB":10,"colsB":10,"threads":4}
   int rowsA, colsA, rowsB, colsB, threads = 4;
 
   if (sscanf(body_start,
@@ -187,28 +178,23 @@ void handle_request(int socket, const char *request) {
   if (threads > MAX_THREADS)
     threads = MAX_THREADS;
 
-  // Выделяем память
   int **A = allocate_matrix(rowsA, colsA);
   int **B = allocate_matrix(rowsB, colsB);
   int **C_seq = allocate_matrix(rowsA, colsB);
   int **C_par = allocate_matrix(rowsA, colsB);
 
-  // Генерируем матрицы
   srand(time(NULL));
   generate_matrix(A, rowsA, colsA);
   generate_matrix(B, rowsB, colsB);
 
-  // Замер времени последовательного умножения
   clock_t start_seq = clock();
   multiply_sequential(A, B, C_seq, rowsA, colsA, colsB);
   clock_t end_seq = clock();
   double time_seq = ((double)(end_seq - start_seq)) / CLOCKS_PER_SEC;
 
-  // Замер времени параллельного умножения
   double time_par =
       multiply_parallel(A, B, C_par, rowsA, colsA, colsB, threads);
 
-  // Проверяем корректность
   int correct = 1;
   for (int i = 0; i < rowsA && correct; i++) {
     for (int j = 0; j < colsB && correct; j++) {
@@ -218,8 +204,8 @@ void handle_request(int socket, const char *request) {
     }
   }
 
-  // Формируем ответ
   char response[1024];
+
   snprintf(response, sizeof(response),
            "{\"sequential_time\":%.6f,\"parallel_time\":%.6f,"
            "\"speedup\":%.2f,\"correct\":%d,"
@@ -229,7 +215,6 @@ void handle_request(int socket, const char *request) {
 
   send_json_response(socket, response);
 
-  // Освобождаем память
   free_matrix(A, rowsA);
   free_matrix(B, rowsB);
   free_matrix(C_seq, rowsA);
@@ -242,13 +227,11 @@ int main() {
   int opt = 1;
   int addrlen = sizeof(address);
 
-  // Создание сокета
   if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
     perror("socket failed");
     exit(EXIT_FAILURE);
   }
 
-  // Настройка сокета
   if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
     perror("setsockopt");
     exit(EXIT_FAILURE);
@@ -258,20 +241,17 @@ int main() {
   address.sin_addr.s_addr = INADDR_ANY;
   address.sin_port = htons(PORT);
 
-  // Биндинг
   if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
     perror("bind failed");
     exit(EXIT_FAILURE);
   }
 
-  // Прослушивание
   if (listen(server_fd, 3) < 0) {
     perror("listen");
     exit(EXIT_FAILURE);
   }
 
-  printf("Matrix multiplication server listening on port %d\n", PORT);
-  printf("Supported methods: sequential and parallel (row-wise)\n");
+  printf("Сервер запущен на порте: %d\n", PORT);
 
   while (1) {
     new_socket =
