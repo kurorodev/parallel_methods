@@ -2,6 +2,7 @@
  * Выполинл: Кудрявцев Даниил 3-ИАИТ-103
  */
 
+#include <bits/pthreadtypes.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -118,6 +119,102 @@ void *thread_function(void *arg) {
   }
     return NULL;
   }
+}
+
+double rectangle_method(func_t func, double a, double b, int n) {
+  double h = (b - a) / n;
+
+  double sum = 0;
+
+  for (int i = 0; i < n; i++) {
+    double x = a + (i + 0.5) * h;
+    sum += calculate_func(func, x);
+  }
+
+  return sum * h;
+}
+
+double trapecia_method(func_t func, double a, double b, int n) {
+  double h = (b - a) / n;
+
+  double sum = 0.5 * (calculate_func(func, a) + calculate_func(func, b));
+
+  for (int i = 0; i < n; i++) {
+    double x = a + i * h;
+    sum += calculate_func(func, x);
+  }
+  return sum * h;
+}
+
+double monte_carlo_method(func_t func, double a, double b, int n) {
+  double sum = 0;
+
+  for (int i = 0; i < n; i++) {
+    double random_seed = (double)rand() / RAND_MAX;
+    double x = a + random_seed * (b - a);
+    sum += calculate_func(func, x);
+  }
+  return (b - a) * sum / n;
+}
+
+double single_thread_calc(func_t func, method_t method, double a, double b,
+                          int n) {
+  switch (method) {
+  case REACTANGLE_METHOD:
+    return rectangle_method(func, a, b, n);
+  case TRAPECIA_METHOD:
+    return trapecia_method(func, a, b, n);
+  case MONTE_CARLO_METHOD:
+    return monte_carlo_method(func, a, b, n);
+  default:
+    return 0.0;
+  }
+}
+
+double multi_thread_calc(func_t func, method_t method, double a, double b,
+                         int n, int num_threads) {
+  if (num_threads <= 1) {
+    return single_thread_calc(func, method, a, b, n);
+  }
+
+  pthread_t *threads = malloc(num_threads * sizeof(pthread_t));
+  thread_data_t *thread_data = malloc(num_threads * sizeof(pthread_t));
+
+  for (int i = 0; i < num_threads; i++) {
+    thread_data[i].func = func;
+    thread_data[i].method = method;
+    thread_data[i].num_threads = num_threads;
+    thread_data[i].a = a;
+    thread_data[i].b = b;
+    thread_data[i].thread_id = i;
+    thread_data[i].n = n;
+    thread_data[i].partial_res = 0.0;
+  }
+
+  for (int i = 0; i < num_threads; i++) {
+    pthread_create(&threads[i], NULL, thread_function, &thread_data[i]);
+  }
+
+  for (int i = 0; i < num_threads; i++) {
+    pthread_join(threads[i], NULL);
+  }
+
+  double total_res = 0.0;
+
+  for (int i = 0; i < num_threads; i++) {
+    total_res += thread_data[i].partial_res;
+  }
+
+  if (method == TRAPECIA_METHOD) {
+    double h = (b - a) / n;
+
+    total_res *= h;
+  }
+
+  free(threads);
+  free(thread_data);
+
+  return total_res;
 }
 
 int main() { return 0; }
