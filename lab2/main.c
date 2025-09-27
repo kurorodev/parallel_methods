@@ -2,13 +2,11 @@
  * Выполинл: Кудрявцев Даниил 3-ИАИТ-103
  */
 
-#include <bits/pthreadtypes.h>
 #include <math.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
@@ -49,11 +47,6 @@ typedef struct {
 } thread_data_t;
 
 double calculate_func(func_t func, double x) {
-  if (func == 0 || x == 0) {
-    puts("ERROR TYPE OR X");
-    return 0.0;
-  }
-
   switch (func) {
   case POLYNOMIAL_FUNC:
     return POLYNOMIAL(x);
@@ -177,9 +170,8 @@ double multi_thread_calc(func_t func, method_t method, double a, double b,
     return single_thread_calc(func, method, a, b, n);
   }
 
-  pthread_t *threads = malloc(num_threads * sizeof(pthread_t));
-  thread_data_t *thread_data = malloc(num_threads * sizeof(pthread_t));
-
+  pthread_t threads[MAX_THREADS];
+  thread_data_t thread_data[MAX_THREADS];
   for (int i = 0; i < num_threads; i++) {
     thread_data[i].func = func;
     thread_data[i].method = method;
@@ -211,10 +203,65 @@ double multi_thread_calc(func_t func, method_t method, double a, double b,
     total_res *= h;
   }
 
-  free(threads);
-  free(thread_data);
-
   return total_res;
 }
 
-int main() { return 0; }
+void measure_execution_time(func_t func, method_t method, double a, double b,
+                            int n, int num_threads) {
+  clock_t start, end;
+  double result, execution_time;
+
+  printf("Функция: %d, Метод: %d, Потоков: %d, Интервалов: %d\n", func, method,
+         num_threads, n);
+
+  // Однопоточное выполнение
+  start = clock();
+  result = single_thread_calc(func, method, a, b, n);
+  end = clock();
+  execution_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+  printf("Однопоточный результат: %.6f, Время: %.6f сек\n", result,
+         execution_time);
+
+  // Многопоточное выполнение
+  start = clock();
+  result = multi_thread_calc(func, method, a, b, n, num_threads);
+  end = clock();
+  execution_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+  printf("Многопоточный результат: %.6f, Время: %.6f сек\n", result,
+         execution_time);
+  printf("---\n");
+}
+
+int main() {
+  double a = 0.0, b = 1.0;
+  int n = 1000000;
+
+  printf("=== ЧИСЛЕННОЕ ИНТЕГРИРОВАНИЕ ===\n\n");
+
+  // Тестирование разных функций
+  func_t functions[] = {POLYNOMIAL_FUNC, OSCILLATORY_FUNC, LOGARITHMIC_FUNC,
+                        GAUSSIAN_FUNC};
+  const char *function_names[] = {"Полиномиальная", "Осцилляторная",
+                                  "Логарифмическая", "Гауссова"};
+
+  method_t methods[] = {REACTANGLE_METHOD, TRAPECIA_METHOD, MONTE_CARLO_METHOD};
+  const char *method_names[] = {"Прямоугольников", "Трапеций", "Монте-Карло"};
+
+  int thread_counts[] = {1, 2, 4, 8, 16};
+
+  for (int func_idx = 0; func_idx < 4; func_idx++) {
+    printf("\n=== Функция: %s ===\n", function_names[func_idx]);
+
+    for (int method_idx = 0; method_idx < 3; method_idx++) {
+      printf("\nМетод: %s\n", method_names[method_idx]);
+
+      for (int thread_idx = 0; thread_idx < 5; thread_idx++) {
+        printf("Количество потоков: %d\n", thread_counts[thread_idx]);
+        measure_execution_time(functions[func_idx], methods[method_idx], a, b,
+                               n, thread_counts[thread_idx]);
+      }
+    }
+  }
+
+  return 0;
+}
