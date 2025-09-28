@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <time.h>
@@ -104,14 +105,14 @@ void *thread_function(void *arg) {
     unsigned int seed = (unsigned int)(time NULL) + data->thread_id;
     for (int i = 0; i < points_per_thread; i++) {
       double random_value = (double)rand_r(&seed) / RAND_MAX;
-      double x = data->a + random_value * (data->b - data->b);
+      double x = data->a + random_value * (data->b - data->a);
       partial_sum += calculate_func(data->func, x);
     }
-    data->partial_res += (data->b - data->a) * partial_sum / points_per_thread;
+    data->partial_res = partial_sum;
     break;
   }
-    return NULL;
   }
+  return NULL;
 }
 
 double rectangle_method(func_t func, double a, double b, int n) {
@@ -188,7 +189,10 @@ double multi_thread_calc(func_t func, method_t method, double a, double b,
   }
 
   for (int i = 0; i < num_threads; i++) {
-    pthread_join(threads[i], NULL);
+    if (pthread_join(threads[i], NULL) != 0) {
+      perror("ERROR JOIN THREAD");
+      exit(1);
+    };
   }
 
   double total_res = 0.0;
@@ -197,19 +201,17 @@ double multi_thread_calc(func_t func, method_t method, double a, double b,
     total_res += thread_data[i].partial_res;
   }
 
-  if (method == TRAPECIA_METHOD) {
-    double h = (b - a) / n;
-
-    total_res *= h;
+  if (method == MONTE_CARLO_METHOD) {
+    total_res = (b - a) * total_res / n;
   }
 
   return total_res;
 }
 
-void measure_execution_time(func_t func, method_t method, double a, double b,
-                            int n, int num_threads) {
+double measure_execution_time(func_t func, method_t method, double a, double b,
+                              int n, int num_threads) {
   clock_t start, end;
-  double result, execution_time;
+  double result, execution_single_time, execution_multi_time, difference;
 
   printf("Функция: %d, Метод: %d, Потоков: %d, Интервалов: %d\n", func, method,
          num_threads, n);
@@ -218,49 +220,136 @@ void measure_execution_time(func_t func, method_t method, double a, double b,
   start = clock();
   result = single_thread_calc(func, method, a, b, n);
   end = clock();
-  execution_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+  execution_single_time = ((double)(end - start)) / CLOCKS_PER_SEC;
   printf("Однопоточный результат: %.6f, Время: %.6f сек\n", result,
-         execution_time);
+         execution_single_time);
 
   // Многопоточное выполнение
   start = clock();
   result = multi_thread_calc(func, method, a, b, n, num_threads);
   end = clock();
-  execution_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+  execution_multi_time = ((double)(end - start)) / CLOCKS_PER_SEC;
   printf("Многопоточный результат: %.6f, Время: %.6f сек\n", result,
-         execution_time);
+         execution_multi_time);
   printf("---\n");
+
+  difference = execution_multi_time - execution_single_time;
+
+  return difference;
+}
+
+void send_json_response(int socket, const char *json) {
+  char headers[2048];
+  snprintf(headers, sizeof(headers),
+           "HTTP/1.1 200 OK\r\n"
+           "Content-Type: application/json\r\n"
+           "Access-Control-Allow-Origin: *\r\n"
+           "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+           "Access-Control-Allow-Headers: Content-Type\r\n"
+           "Content-Length: %zu\r\n\r\n%s",
+           strlen(json), json);
+
+  send(socket, headers, strlen(headers), 0);
+}
+
+void handle_options(int socket) {
+  char response[] = "HTTP/1.1 200 OK\r\n"
+                    "Access-Control-Allow-Origin: *\r\n"
+                    "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                    "Access-Control-Allow-Headers: Content-Type\r\n"
+                    "Content-Length: 0\r\n\r\n";
+
+  send(socket, response, strlen(response), 0);
+}
+
+void handle_request(int socket, const char *request) {
+  if (strstr(request, "OPTIONS")) {
+    handle_options(socket);
+    return;
+
+    char json_data[1024];
+
+    send_json_response(socket, json_data);
+  }
+
+  if (!strstr(request, "POST")) {
+    send_json_response(socket, "{\"error\":\"Only POST method supported\"}");
+    return;
+  }
+
+  const char *body_start = strstr(request, "\r\n\r\n");
+  if (!body_start) {
+    send_json_response(socket, "{\"error\":\"No request body\"}");
+    return;
+  }
+  body_start += 4;
+
+  method_t method;
+  func_t func;
+  int threads, n;
+  double a;
+  double b;
+
+  sscanf(body_start,
+         "{\"method\":%d,\"func\":%d,\"n\":%d,\"threads\":%d,\"a\":%lf, "
+         "\"b\":%lf}",
+         &method, &func, &n, &threads, &a, &b);
+
+  if (threads <= 0) {
+    threads = 4;
+  }
+  if (threads > MAX_THREADS) {
+    threads = MAX_THREADS;
+  }
+
+  measure_execution_time(func, method, a, b, n, threads);
 }
 
 int main() {
-  double a = 0.0, b = 1.0;
-  int n = 1000000;
+  int server_fd, new_socket;
+  struct sockaddr_in address;
+  int opt = 1;
+  int addrlen = sizeof(address);
 
-  printf("=== ЧИСЛЕННОЕ ИНТЕГРИРОВАНИЕ ===\n\n");
+  if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+    perror("socket failed");
+    exit(EXIT_FAILURE);
+  }
 
-  // Тестирование разных функций
-  func_t functions[] = {POLYNOMIAL_FUNC, OSCILLATORY_FUNC, LOGARITHMIC_FUNC,
-                        GAUSSIAN_FUNC};
-  const char *function_names[] = {"Полиномиальная", "Осцилляторная",
-                                  "Логарифмическая", "Гауссова"};
+  if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+    perror("setsockopt");
+    exit(EXIT_FAILURE);
+  }
 
-  method_t methods[] = {REACTANGLE_METHOD, TRAPECIA_METHOD, MONTE_CARLO_METHOD};
-  const char *method_names[] = {"Прямоугольников", "Трапеций", "Монте-Карло"};
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = INADDR_ANY;
+  address.sin_port = htons(PORT);
 
-  int thread_counts[] = {1, 2, 4, 8, 16};
+  if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    perror("bind failed");
+    exit(EXIT_FAILURE);
+  }
 
-  for (int func_idx = 0; func_idx < 4; func_idx++) {
-    printf("\n=== Функция: %s ===\n", function_names[func_idx]);
+  if (listen(server_fd, 3) < 0) {
+    perror("listen");
+    exit(EXIT_FAILURE);
+  }
 
-    for (int method_idx = 0; method_idx < 3; method_idx++) {
-      printf("\nМетод: %s\n", method_names[method_idx]);
+  printf("Сервер запущен на порте: %d\n", PORT);
 
-      for (int thread_idx = 0; thread_idx < 5; thread_idx++) {
-        printf("Количество потоков: %d\n", thread_counts[thread_idx]);
-        measure_execution_time(functions[func_idx], methods[method_idx], a, b,
-                               n, thread_counts[thread_idx]);
-      }
+  while (1) {
+    new_socket =
+        accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen);
+    if (new_socket < 0) {
+      perror("accept");
+      continue;
     }
+
+    char buffer[4096] = {0};
+    read(new_socket, buffer, sizeof(buffer) - 1);
+
+    handle_request(new_socket, buffer);
+    close(new_socket);
   }
 
   return 0;
