@@ -208,36 +208,6 @@ double multi_thread_calc(func_t func, method_t method, double a, double b,
   return total_res;
 }
 
-double measure_execution_time(func_t func, method_t method, double a, double b,
-                              int n, int num_threads) {
-  clock_t start, end;
-  double result, execution_single_time, execution_multi_time, difference;
-
-  printf("Функция: %d, Метод: %d, Потоков: %d, Интервалов: %d\n", func, method,
-         num_threads, n);
-
-  // Однопоточное выполнение
-  start = clock();
-  result = single_thread_calc(func, method, a, b, n);
-  end = clock();
-  execution_single_time = ((double)(end - start)) / CLOCKS_PER_SEC;
-  printf("Однопоточный результат: %.6f, Время: %.6f сек\n", result,
-         execution_single_time);
-
-  // Многопоточное выполнение
-  start = clock();
-  result = multi_thread_calc(func, method, a, b, n, num_threads);
-  end = clock();
-  execution_multi_time = ((double)(end - start)) / CLOCKS_PER_SEC;
-  printf("Многопоточный результат: %.6f, Время: %.6f сек\n", result,
-         execution_multi_time);
-  printf("---\n");
-
-  difference = execution_multi_time - execution_single_time;
-
-  return difference;
-}
-
 void send_json_response(int socket, const char *json) {
   char headers[2048];
   snprintf(headers, sizeof(headers),
@@ -287,8 +257,9 @@ void handle_request(int socket, const char *request) {
   method_t method;
   func_t func;
   int threads, n;
-  double a;
-  double b;
+  double diff, a, b, result_single, result_multi, execution_single_time,
+      execution_multi_time, difference;
+  clock_t start, end;
 
   sscanf(body_start,
          "{\"method\":%d,\"func\":%d,\"n\":%d,\"threads\":%d,\"a\":%lf, "
@@ -301,8 +272,37 @@ void handle_request(int socket, const char *request) {
   if (threads > MAX_THREADS) {
     threads = MAX_THREADS;
   }
+  printf("Функция: %d, Метод: %d, Потоков: %d, Интервалов: %d\n", func, method,
+         threads, n);
 
-  measure_execution_time(func, method, a, b, n, threads);
+  // Однопоточное выполнение
+  start = clock();
+  result_single = single_thread_calc(func, method, a, b, n);
+  end = clock();
+  execution_single_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+  printf("Однопоточный результат: %.6f, Время: %.6f сек\n", result_single,
+         execution_single_time);
+
+  // Многопоточное выполнение
+  start = clock();
+  result_multi = multi_thread_calc(func, method, a, b, n, threads);
+  end = clock();
+  execution_multi_time = ((double)(end - start)) / CLOCKS_PER_SEC;
+  printf("Многопоточный результат: %.6f, Время: %.6f сек\n", result_multi,
+         execution_multi_time);
+
+  difference = execution_multi_time - execution_single_time;
+  printf("Разница во времени: %lf\n", difference);
+  printf("---\n");
+
+  char response[1024];
+  snprintf(response, sizeof(response),
+           "{\"difference\":%lf, \"method\":%d, \"threads\":%d, "
+           "\"result_single\":%lf, \"result_multi\":%lf, "
+           "\"execution_single_time\":%lf,\"execution_multi_time\"%lf}",
+           difference, method, threads, result_single, result_multi,
+           execution_single_time, execution_multi_time);
+  send_json_response(socket, response);
 }
 
 int main() {
