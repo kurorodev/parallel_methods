@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Лабораторная работа №2 - Численное интегрирование</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header h2 {
+            font-size: 1.3em;
+            font-weight: 300;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-calculate {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+        }
+
+        .btn-calculate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-test {
+            background: linear-gradient(135deg, #e67e22, #f39c12);
+            color: white;
+        }
+
+        .btn-test:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(230, 126, 34, 0.4);
+        }
+
+        .btn-connection {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            color: white;
+        }
+
+        .btn-connection:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(155, 89, 182, 0.4);
+        }
+
+        .results-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+        }
+
+        .results h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+
+        .result-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .result-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .result-label {
+            font-weight: 600;
+            color: #555;
+        }
+
+        .result-value {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .positive {
+            color: #27ae60;
+        }
+
+        .negative {
+            color: #e74c3c;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #f5c6cb;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #efe;
+            color: #27ae60;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #c3e6cb;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .warning-message {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ffeaa7;
+            margin-bottom: 20px;
+        }
+
+        .chart-container {
+            margin-top: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #chart {
+            width: 100%;
+            height: 300px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .function-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #1565c0;
+        }
+
+        .method-info {
+            background: #f3e5f5;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #7b1fa2;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+        }
+
+        .status-dot.connected {
+            background: #27ae60;
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Лабораторная работа №2</h1>
+            <h2>Параллельное и последовательное численное интегрирование</h2>
+            <p>Кудрявцев Даниил 3-ИАИТ-103</p>
+        </div>
+
+        <div class="content">
+            <div class="input-section">
+                <h3>Параметры интегрирования</h3>
+                
+                <div class="connection-status">
+                    <div class="status-dot" id="statusDot"></div>
+                    <span class="status-text" id="statusText">Проверка соединения...</span>
+                </div>
+
+                <div class="warning-message">
+                    <strong>Внимание:</strong> Для работы приложения запустите сервер на порту 8080 и откройте эту страницу через HTTP сервер (python -m http.server 8000)
+                </div>
+                
+                <div class="input-group">
+                    <label for="func">Функция:</label>
+                    <select id="func" onchange="updateFunctionInfo()">
+                        <option value="0">Полиномиальная (x² + 3x + 2)</option>
+                        <option value="1">Осциллирующая (sin(x) * e^(-x/5))</option>
+                        <option value="2">Логарифмическая (ln(1 + x))</option>
+                        <option value="3">Гауссова (e^(-x²))</option>
+                    </select>
+                    <div id="functionInfo" class="function-info">
+                        Полиномиальная функция: f(x) = x² + 3x + 2
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="method">Метод интегрирования:</label>
+                    <select id="method" onchange="updateMethodInfo()">
+                        <option value="0">Метод прямоугольников</option>
+                        <option value="1">Метод трапеций</option>
+                        <option value="2">Метод Монте-Карло</option>
+                    </select>
+                    <div id="methodInfo" class="method-info">
+                        Метод средних прямоугольников
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Интервал интегрирования:</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div>
+                            <label for="a">Нижний предел (a):</label>
+                            <input type="number" id="a" value="0" step="0.1">
+                        </div>
+                        <div>
+                            <label for="b">Верхний предел (b):</label>
+                            <input type="number" id="b" value="1" step="0.1">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label for="n">Количество интервалов/точек:</label>
+                    <input type="number" id="n" value="100000" min="1000" max="10000000">
+                </div>
+
+                <div class="input-group">
+                    <label for="threads">Количество потоков:</label>
+                    <input type="number" id="threads" value="4" min="1" max="32">
+                </div>
+
+                <div class="buttons">
+                    <button class="btn-calculate" onclick="calculate()">Вычислить</button>
+                    <button class="btn-test" onclick="runTests()">Запустить тесты</button>
+                    <button class="btn-connection" onclick="testConnection()">Проверить соединение</button>
+                </div>
+
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Выполнение вычислений...</p>
+                </div>
+
+                <div id="errorMessage" class="error-message"></div>
+                <div id="successMessage" class="success-message"></div>
+            </div>
+
+            <div class="results-section">
+                <h3>Результаты вычислений</h3>
+                
+                <div class="result-card">
+                    <div class="result-row">
+                        <span class="result-label">Результат (однопоточный):</span>
+                        <span id="resultSingle" class="result-value">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Результат (многопоточный):</span>
+                        <span id="resultMulti" class="result-value">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Время (однопоточный):</span>
+                        <span id="timeSingle" class="result-value">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Время (многопоточный):</span>
+                        <span id="timeMulti" class="result-value">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Разница во времени:</span>
+                        <span id="timeDiff" class="result-value">-</span>
+                    </div>
+                    <div class="result-row">
+                        <span class="result-label">Ускорение:</span>
+                        <span id="speedup" class="result-value">-</span>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <h4>Сравнение производительности</h4>
+                    <canvas id="chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SERVER_URL = 'http://localhost:8080';
+        let testResults = [];
+        let isServerConnected = false;
+
+        function updateFunctionInfo() {
+            const funcSelect = document.getElementById('func');
+            const infoDiv = document.getElementById('functionInfo');
+            const functions = [
+                'Полиномиальная функция: f(x) = x² + 3x + 2',
+                'Осциллирующая функция: f(x) = sin(x) × e^(-x/5)',
+                'Логарифмическая функция: f(x) = ln(1 + x)',
+                'Гауссова функция: f(x) = e^(-x²)'
+            ];
+            infoDiv.textContent = functions[funcSelect.value];
+        }
+
+        function updateMethodInfo() {
+            const methodSelect = document.getElementById('method');
+            const infoDiv = document.getElementById('methodInfo');
+            const methods = [
+                'Метод средних прямоугольников',
+                'Метод трапеций',
+                'Метод Монте-Карло (стохастический)'
+            ];
+            infoDiv.textContent = methods[methodSelect.value];
+        }
+
+        function updateConnectionStatus(connected, message) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            isServerConnected = connected;
+            
+            if (connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = message || 'Сервер подключен';
+                statusText.style.color = '#27ae60';
+            } else {
+                statusDot.className = 'status-dot';
+                statusText.textContent = message || 'Сервер не доступен';
+                statusText.style.color = '#e74c3c';
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => errorDiv.style.display = 'none', 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('successMessage');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            setTimeout(() => successDiv.style.display = 'none', 3000);
+        }
+
+        function showLoading() {
+            document.querySelector('.loading').style.display = 'block';
+        }
+
+        function hideLoading() {
+            document.querySelector('.loading').style.display = 'none';
+        }
+
+        async function testConnection() {
+            showLoading();
+            try {
+                console.log('Testing connection to:', SERVER_URL);
+                const response = await fetch(SERVER_URL, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                console.log('Connection test response:', response.status, response.statusText);
+
+                if (response.ok) {
+                    updateConnectionStatus(true, 'Сервер подключен и готов к работе');
+                    showSuccess('Соединение с сервером установлено!');
+                } else {
+                    updateConnectionStatus(false, `Сервер ответил с ошибкой: ${response.status}`);
+                    showError(`Сервер ответил с ошибкой: ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Connection test failed:', error);
+                updateConnectionStatus(false, 'Не удалось подключиться к серверу');
+                
+                if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
+                    showError('Ошибка CORS. Запустите HTML через HTTP сервер: python -m http.server 8000');
+                } else {
+                    showError('Ошибка подключения: ' + error.message);
+                }
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function calculate() {
+            if (!isServerConnected) {
+                showError('Сервер не подключен. Сначала проверьте соединение.');
+                return;
+            }
+
+            const func = parseInt(document.getElementById('func').value);
+            const method = parseInt(document.getElementById('method').value);
+            const a = parseFloat(document.getElementById('a').value);
+            const b = parseFloat(document.getElementById('b').value);
+            const n = parseInt(document.getElementById('n').value);
+            const threads = parseInt(document.getElementById('threads').value);
+
+            // Валидация
+            if (a >= b) {
+                showError('Ошибка: Нижний предел должен быть меньше верхнего предела');
+                return;
+            }
+
+            if (n < 1000) {
+                showError('Ошибка: Количество интервалов должно быть не менее 1000');
+                return;
+            }
+
+            showLoading();
+
+            try {
+                console.log('Sending calculation request...');
+                
+                const response = await fetch(SERVER_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        method: method,
+                        func: func,
+                        n: n,
+                        threads: threads,
+                        a: a,
+                        b: b
+                    })
+                });
+
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const responseText = await response.text();
+                console.log('Raw response:', responseText);
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    console.error('JSON parse error:', e);
+                    throw new Error('Неверный формат ответа от сервера');
+                }
+
+                // Проверяем на ошибку в данных
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+
+                displayResults(data);
+                showSuccess('Вычисления успешно завершены!');
+
+            } catch (error) {
+                console.error('Calculation error:', error);
+                showError('Ошибка вычислений: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayResults(data) {
+            console.log('Displaying data:', data);
+            
+            // Обновляем результаты
+            document.getElementById('resultSingle').textContent = 
+                data.result_single !== undefined ? data.result_single.toFixed(6) : '-';
+            document.getElementById('resultMulti').textContent = 
+                data.result_multi !== undefined ? data.result_multi.toFixed(6) : '-';
+            document.getElementById('timeSingle').textContent = 
+                data.execution_single_time !== undefined ? data.execution_single_time.toFixed(6) + ' сек' : '-';
+            document.getElementById('timeMulti').textContent = 
+                data.execution_multi_time !== undefined ? data.execution_multi_time.toFixed(6) + ' сек' : '-';
+            
+            // Разница во времени и ускорение
+            const timeDiff = data.difference !== undefined ? data.difference : 0;
+            const timeDiffElement = document.getElementById('timeDiff');
+            timeDiffElement.textContent = timeDiff.toFixed(6) + ' сек';
+            
+            if (timeDiff < 0) {
+                timeDiffElement.className = 'result-value positive';
+            } else if (timeDiff > 0) {
+                timeDiffElement.className = 'result-value negative';
+            } else {
+                timeDiffElement.className = 'result-value';
+            }
+            
+            const speedup = data.speedup || (data.execution_single_time && data.execution_multi_time ? 
+                data.execution_single_time / data.execution_multi_time : 1);
+            document.getElementById('speedup').textContent = speedup.toFixed(2) + 'x';
+            
+            // Сохраняем для графика
+            testResults.push({
+                threads: data.threads,
+                singleTime: data.execution_single_time,
+                multiTime: data.execution_multi_time,
+                speedup: speedup
+            });
+            
+            updateChart();
+        }
+
+        async function runTests() {
+            if (!isServerConnected) {
+                showError('Сервер не подключен. Сначала проверьте соединение.');
+                return;
+            }
+
+            const func = parseInt(document.getElementById('func').value);
+            const method = parseInt(document.getElementById('method').value);
+            const a = parseFloat(document.getElementById('a').value);
+            const b = parseFloat(document.getElementById('b').value);
+            const n = parseInt(document.getElementById('n').value);
+            
+            testResults = [];
+            showLoading();
+            
+            const threadCounts = [1, 2, 4, 8, 16];
+            let completed = 0;
+            
+            for (const threads of threadCounts) {
+                try {
+                    console.log(`Testing with ${threads} threads...`);
+                    
+                    const response = await fetch(SERVER_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            method: method,
+                            func: func,
+                            n: n,
+                            threads: threads,
+                            a: a,
+                            b: b
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    testResults.push({
+                        threads: threads,
+                        singleTime: data.execution_single_time,
+                        multiTime: data.execution_multi_time,
+                        speedup: data.speedup || (data.execution_single_time / data.execution_multi_time)
+                    });
+                    
+                    completed++;
+                    console.log(`Completed ${completed}/${threadCounts.length} tests`);
+                    
+                } catch (error) {
+                    console.error(`Error testing with ${threads} threads:`, error);
+                }
+            }
+            
+            updateChart();
+            hideLoading();
+            showSuccess(`Тестирование завершено! Выполнено ${completed} тестов`);
+        }
+
+        function updateChart() {
+            const ctx = document.getElementById('chart').getContext('2d');
+            
+            // Очищаем canvas
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            
+            if (testResults.length === 0) {
+                // Рисуем сообщение об отсутствии данных
+                ctx.fillStyle = '#999';
+                ctx.font = '16px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Нет данных для графика', ctx.canvas.width / 2, ctx.canvas.height / 2);
+                return;
+            }
+            
+            const padding = 50;
+            const width = ctx.canvas.width - padding * 2;
+            const height = ctx.canvas.height - padding * 2;
+            
+            // Находим максимальные значения
+            const maxThreads = Math.max(...testResults.map(r => r.threads));
+            const maxTime = Math.max(...testResults.map(r => Math.max(r.singleTime, r.multiTime)));
+            
+            // Рисуем оси
+            ctx.beginPath();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height + padding);
+            ctx.lineTo(width + padding, height + padding);
+            ctx.stroke();
+            
+            // Подписи осей
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Количество потоков', width / 2 + padding, height + padding + 30);
+            
+            ctx.save();
+            ctx.translate(20, height / 2 + padding);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.fillText('Время выполнения (сек)', 0, 0);
+            ctx.restore();
+            
+            // Рисуем данные
+            drawDataPoints(ctx, testResults, padding, width, height, maxThreads, maxTime);
+        }
+
+        function drawDataPoints(ctx, data, padding, width, height, maxThreads, maxTime) {
+            // Однопоточное время (красный)
+            ctx.beginPath();
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            
+            data.forEach((point, i) => {
+                const x = padding + (point.threads / maxThreads) * width;
+                const y = padding + height - (point.singleTime / maxTime) * height;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                // Точка
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = 'red';
+                ctx.fill();
+            });
+            ctx.stroke();
+            
+            // Многопоточное время (синий)
+            ctx.beginPath();
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            
+            data.forEach((point, i) => {
+                const x = padding + (point.threads / maxThreads) * width;
+                const y = padding + height - (point.multiTime / maxTime) * height;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                
+                // Точка
+                ctx.beginPath();
+                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                ctx.fillStyle = 'blue';
+                ctx.fill();
+            });
+            ctx.stroke();
+            
+            // Легенда
+            ctx.fillStyle = 'red';
+            ctx.fillRect(width + padding - 100, padding, 20, 3);
+            ctx.fillStyle = '#000';
+            ctx.fillText('Однопоточный', width + padding - 70, padding + 10);
+            
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(width + padding - 100, padding + 20, 20, 3);
+            ctx.fillStyle = '#000';
+            ctx.fillText('Многопоточный', width + padding - 70, padding + 30);
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            updateFunctionInfo();
+            updateMethodInfo();
+            
+            // Автоматическая проверка соединения при загрузке
+            setTimeout(() => {
+                testConnection();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -235,7 +235,6 @@ void handle_options(int socket) {
 void handle_request(int socket, const char *request) {
   if (strstr(request, "OPTIONS")) {
     handle_options(socket);
-    return;
 
     char json_data[1024];
 
@@ -244,13 +243,11 @@ void handle_request(int socket, const char *request) {
 
   if (!strstr(request, "POST")) {
     send_json_response(socket, "{\"error\":\"Only POST method supported\"}");
-    return;
   }
 
   const char *body_start = strstr(request, "\r\n\r\n");
   if (!body_start) {
     send_json_response(socket, "{\"error\":\"No request body\"}");
-    return;
   }
   body_start += 4;
 
